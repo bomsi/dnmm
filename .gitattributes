@@ -1,0 +1,16 @@
+# Automatically handle line ending normalization
+
+* text=auto
+
+# Automatically handle tabindentation
+#
+# Requires additonal platform dependent setup
+#
+# Linux and Windows, if you're using Git for Windows (https://git-scm.com/download/win) which comes with GNU CoreUtils
+# git config filter.tabspace.smudge 'unexpand --tabs=4 --first-only'
+# git config filter.tabspace.clean 'expand --tabs=4 --initial'
+#
+# clean action runs when changes are added to the index
+# smudge runs on checkout
+
+*.cs filter=tabspace
