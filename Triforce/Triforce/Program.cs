@@ -33,8 +33,6 @@ namespace Triforce
         private RenderPass renderPass;
         private PipelineLayout pipelineLayout;
         private Pipeline pipeline;
-        private ShaderModule fragShader;
-        private ShaderModule vertShader;
         private Framebuffer[] frameBuffers;
         private CommandPool commandPool;
         private CommandBuffer[] commandBuffers;
@@ -57,34 +55,54 @@ namespace Triforce
             this.TearDown();
         }
 
+        #region First level of abstraction
+
+        /// <summary>
+        /// Initializes the main window and sets a event handler for window
+        /// size change.
+        /// </summary>
         private void InitialiseWindow()
         {
+            // Create a new form window and set the title and window size
             this.window = new Form
             {
                 Text = "Vulkan",
-                ClientSize = new System.Drawing.Size(SurfaceWidth, SurfaceHeight)
+                ClientSize = new SysDraw.Size(SurfaceWidth, SurfaceHeight)
             };
 
-            this.window.ClientSizeChanged += (x, y) => this.RecreateSwapChain();
+            // Add event handler for ClientSizeChanged event, resizes the 
+            // canvas and triangle to fit the window boundary
+            this.window.ClientSizeChanged +=
+                (x, y) => this.RecreateSwapChain();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         private void InitialiseVulkan()
         {
             this.CreateInstance();
             this.CreateSurface();
             this.PickPhysicalDevice();
             this.CreateLogicalDevice();
+
+            #region Block_01 is the same as Block_02
             this.CreateSwapChain();
             this.CreateImageViews();
             this.CreateRenderPass();
-            this.CreateShaderModules();
             this.CreateGraphicsPipeline();
             this.CreateFrameBuffers();
+            #endregion
+
             this.CreateCommandPool();
             this.CreateCommandBuffers();
             this.CreateSemaphores();
         }
 
+        /// <summary>
+        /// Displays main window, draws frames in while loop while the window
+        /// doesn't get disposed (in other words closed).
+        /// </summary>
         private void MainLoop()
         {
             this.window.Show();
@@ -93,10 +111,65 @@ namespace Triforce
             {
                 this.DrawFrame();
 
+                // if this gets commented out the form window is blocked and 
+                // cannot be interacted with
                 Application.DoEvents();
             }
         }
 
+        private void TearDown()
+        {
+            device.WaitIdle();
+
+            this.renderFinishedSemaphore.Dispose();
+            this.renderFinishedSemaphore = null;
+
+            this.imageAvailableSemaphore.Dispose();
+            this.imageAvailableSemaphore = null;
+
+            this.commandPool.Dispose();
+            this.commandPool = null;
+
+            foreach (var frameBuffer in this.frameBuffers)
+            {
+                frameBuffer.Dispose();
+            }
+            this.frameBuffers = null;
+
+            this.pipeline.Dispose();
+            this.pipeline = null;
+
+            this.pipelineLayout.Dispose();
+            this.pipelineLayout = null;
+
+            foreach (var imageView in this.swapChainImageViews)
+            {
+                imageView.Dispose();
+            }
+            this.swapChainImageViews = null;
+
+            this.renderPass.Dispose();
+            this.renderPass = null;
+
+            this.swapChain.Dispose();
+            this.swapChain = null;
+
+            this.device.Dispose();
+            this.device = null;
+
+            this.surface.Dispose();
+            this.surface = null;
+
+            this.instance.Dispose();
+            this.instance = null;
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Used as the only method called in the ClientSizeChanged event 
+        /// handler in order to resize the background canvas and triangle.
+        /// </summary>
         private void RecreateSwapChain()
         {
             this.device.WaitIdle();
@@ -127,128 +200,143 @@ namespace Triforce
             this.swapChain.Dispose();
             this.swapChain = null;
 
+            #region Block_02 is the same as Block_01
             this.CreateSwapChain();
             this.CreateImageViews();
             this.CreateRenderPass();
             this.CreateGraphicsPipeline();
             this.CreateFrameBuffers();
+            #endregion
+
             this.CreateCommandBuffers();
-        }
-
-        private void TearDown()
-        {
-            device.WaitIdle();
-
-            this.renderFinishedSemaphore.Dispose();
-            this.renderFinishedSemaphore = null;
-
-            this.imageAvailableSemaphore.Dispose();
-            this.imageAvailableSemaphore = null;
-
-            this.commandPool.Dispose();
-            this.commandPool = null;
-
-            foreach (var frameBuffer in this.frameBuffers)
-            {
-                frameBuffer.Dispose();
-            }
-            this.frameBuffers = null;
-
-            this.fragShader.Dispose();
-            this.fragShader = null;
-
-            this.vertShader.Dispose();
-            this.vertShader = null;
-
-            this.pipeline.Dispose();
-            this.pipeline = null;
-
-            this.pipelineLayout.Dispose();
-            this.pipelineLayout = null;
-
-            foreach (var imageView in this.swapChainImageViews)
-            {
-                imageView.Dispose();
-            }
-            this.swapChainImageViews = null;
-
-            this.renderPass.Dispose();
-            this.renderPass = null;
-
-            this.swapChain.Dispose();
-            this.swapChain = null;
-
-            this.device.Dispose();
-            this.device = null;
-
-            this.surface.Dispose();
-            this.surface = null;
-
-            this.instance.Dispose();
-            this.instance = null;
         }
 
         private void DrawFrame()
         {
-            uint nextImage = this.swapChain.AcquireNextImage(uint.MaxValue, this.imageAvailableSemaphore, null);
+            uint nextImage =
+                this.swapChain.AcquireNextImage(
+                    uint.MaxValue,
+                    this.imageAvailableSemaphore,
+                    null
+                );
+
+            var commandBuffer =
+                new CommandBuffer[] { this.commandBuffers[nextImage] };
+
+            var signalSemaphores = new[] { this.renderFinishedSemaphore };
+
+            var waitDestinationStageMask =
+                new[] { PipelineStageFlags.ColorAttachmentOutput };
+
+            var graphicsQueueWaitSemaphore =
+                new[] { this.imageAvailableSemaphore };
 
             this.graphicsQueue.Submit(new SubmitInfo[]
             {
                 new SubmitInfo
                 {
-                    CommandBuffers = new CommandBuffer[] { this.commandBuffers[nextImage] },
-                    SignalSemaphores = new[] { this.renderFinishedSemaphore },
-                    WaitDestinationStageMask = new [] { PipelineStageFlags.ColorAttachmentOutput },
-                    WaitSemaphores = new [] { this.imageAvailableSemaphore }
+                    CommandBuffers = commandBuffer,
+                    SignalSemaphores = signalSemaphores,
+                    WaitDestinationStageMask = waitDestinationStageMask,
+                    WaitSemaphores = graphicsQueueWaitSemaphore
                 }
             }, null);
+
+            var imageIndices = new uint[] { nextImage };
+
+            var result = new Result[1];
+
+            var presentQueueWaitSemaphore =
+                new[] { this.renderFinishedSemaphore };
+
+            var swapchain = new[] { this.swapChain };
 
             this.presentQueue.Present(new PresentInfo
             {
-                ImageIndices = new uint[] { nextImage },
-                Results = new Result[1],
-                WaitSemaphores = new[] { this.renderFinishedSemaphore },
-                Swapchains = new[] { this.swapChain }
+                ImageIndices = imageIndices,
+                Results = result,
+                WaitSemaphores = presentQueueWaitSemaphore,
+                Swapchains = swapchain
             });
         }
 
+        /// <summary>
+        /// Creates base instance of a Vulkan application. Every digest of the
+        /// API starts with the application instance that is the gateway to
+        /// Vulkan functionality.
+        /// </summary>
         private void CreateInstance()
         {
-            this.instance = Instance.Create(new InstanceCreateInfo
+            // the information in here is arbitrary, used for the developers
+            // reference
+            var applicationName = "Hello Triangle";
+            var applicationVersion = new SharpVk.Version(1, 0, 1);
+            var engineName = "SharpVk";
+            var engineVersion = new SharpVk.Version(0, 1, 2);
+
+            var applicationInfo = new ApplicationInfo
             {
-                ApplicationInfo = new ApplicationInfo
-                {
-                    ApplicationName = "Hello Triangle",
-                    ApplicationVersion = new SharpVk.Version(1, 0, 0),
-                    EngineName = "SharpVk",
-                    EngineVersion = new SharpVk.Version(0, 1, 1)
-                },
-                EnabledExtensionNames = new[]
-                {
-                    KhrSurface.ExtensionName,
-                    KhrWin32Surface.ExtensionName
-                }
-            }, null);
+                ApplicationName = applicationName,
+                ApplicationVersion = applicationVersion,
+                EngineName = engineName,
+                EngineVersion = engineVersion
+            };
+
+            // initializing extensions, TODO: find out what they are
+            var enabledExtensionNames = new[]
+            {
+                KhrSurface.ExtensionName,
+                KhrWin32Surface.ExtensionName
+            };
+
+            InstanceCreateInfo instanceCreateInfo = new InstanceCreateInfo
+            {
+                ApplicationInfo = applicationInfo,
+                EnabledExtensionNames = enabledExtensionNames
+            };
+
+            this.instance = Instance.Create(instanceCreateInfo, null);
         }
 
+        /// <summary>
+        /// Creates a render surface on the main application window.
+        /// </summary>
         private void CreateSurface()
         {
-            this.surface = this.instance.CreateWin32Surface(new Win32SurfaceCreateInfo
+            // get the window handle info in order to reference it during
+            // surface creation
+            Win32SurfaceCreateInfo win32SurfaceCreateInfo =
+            new Win32SurfaceCreateInfo
             {
                 Hwnd = this.window.Handle
-            });
+            };
+
+            this.surface =
+                this.instance.CreateWin32Surface(win32SurfaceCreateInfo);
         }
 
+        /// <summary>
+        /// Sets a physical device that is used for render output.
+        /// </summary>
         private void PickPhysicalDevice()
         {
+            // an instance possesses a list of available physical devices to
+            // chose from
             var availableDevices = this.instance.EnumeratePhysicalDevices();
 
+            // get the first device available
             this.physicalDevice = availableDevices.First(IsSuitableDevice);
         }
 
+        /// <summary>
+        /// Creates an abstraction layer over the chosen physical device
+        /// TODO: Still not sure how the process in the method works, need more
+        /// research.
+        /// </summary>
         private void CreateLogicalDevice()
         {
-            QueueFamilyIndices queueFamilies = FindQueueFamilies(this.physicalDevice);
+            QueueFamilyIndices queueFamilies =
+                FindQueueFamilies(this.physicalDevice);
 
             this.device = physicalDevice.CreateDevice(new DeviceCreateInfo
             {
@@ -390,13 +478,13 @@ namespace Triforce
             });
         }
 
-
-        private void CreateShaderModules()
+        private void CreateGraphicsPipeline()
         {
             int codeSize;
+
             var vertShaderData = LoadShaderData(@".\Shaders\vert.spv", out codeSize);
 
-            this.vertShader = device.CreateShaderModule(new ShaderModuleCreateInfo
+            var vertShader = device.CreateShaderModule(new ShaderModuleCreateInfo
             {
                 Code = vertShaderData,
                 CodeSize = codeSize
@@ -404,109 +492,109 @@ namespace Triforce
 
             var fragShaderData = LoadShaderData(@".\Shaders\frag.spv", out codeSize);
 
-            this.fragShader = device.CreateShaderModule(new ShaderModuleCreateInfo
+            var fragShader = device.CreateShaderModule(new ShaderModuleCreateInfo
             {
                 Code = fragShaderData,
                 CodeSize = codeSize
             });
-        }
 
-        private void CreateGraphicsPipeline()
-        {
             this.pipelineLayout = device.CreatePipelineLayout(new PipelineLayoutCreateInfo());
 
             this.pipeline = device.CreateGraphicsPipelines(null, new[]
             {
-                    new GraphicsPipelineCreateInfo
+                new GraphicsPipelineCreateInfo
+                {
+                    Layout = this.pipelineLayout,
+                    RenderPass = this.renderPass,
+                    Subpass = 0,
+                    VertexInputState = new PipelineVertexInputStateCreateInfo(),
+                    InputAssemblyState = new PipelineInputAssemblyStateCreateInfo
                     {
-                        Layout = this.pipelineLayout,
-                        RenderPass = this.renderPass,
-                        Subpass = 0,
-                        VertexInputState = new PipelineVertexInputStateCreateInfo(),
-                        InputAssemblyState = new PipelineInputAssemblyStateCreateInfo
+                        PrimitiveRestartEnable = false,
+                        Topology = PrimitiveTopology.TriangleList
+                    },
+                    ViewportState = new PipelineViewportStateCreateInfo
+                    {
+                        Viewports = new[]
                         {
-                            PrimitiveRestartEnable = false,
-                            Topology = PrimitiveTopology.TriangleList
-                        },
-                        ViewportState = new PipelineViewportStateCreateInfo
-                        {
-                            Viewports = new[]
+                            new Viewport
                             {
-                                new Viewport
-                                {
-                                    X = 0f,
-                                    Y = 0f,
-                                    Width = this.swapChainExtent.Width,
-                                    Height = this.swapChainExtent.Height,
-                                    MaxDepth = 1,
-                                    MinDepth = 0
-                                }
-                            },
-                            Scissors = new[]
-                            {
-                                new Rect2D
-                                {
-                                    Offset = new Offset2D(),
-                                    Extent= this.swapChainExtent
-                                }
+                                X = 0f,
+                                Y = 0f,
+                                Width = this.swapChainExtent.Width,
+                                Height = this.swapChainExtent.Height,
+                                MaxDepth = 1,
+                                MinDepth = 0
                             }
                         },
-                        RasterizationState = new PipelineRasterizationStateCreateInfo
+                        Scissors = new[]
                         {
-                            DepthClampEnable = false,
-                            RasterizerDiscardEnable = false,
-                            PolygonMode = PolygonMode.Fill,
-                            LineWidth = 1,
-                            CullMode = CullModeFlags.Back,
-                            FrontFace = FrontFace.Clockwise,
-                            DepthBiasEnable = false
-                        },
-                        MultisampleState = new PipelineMultisampleStateCreateInfo
-                        {
-                            SampleShadingEnable = false,
-                            RasterizationSamples = SampleCountFlags.SampleCount1,
-                            MinSampleShading = 1
-                        },
-                        ColorBlendState = new PipelineColorBlendStateCreateInfo
-                        {
-                            Attachments = new[]
+                            new Rect2D
                             {
-                                new PipelineColorBlendAttachmentState
-                                {
-                                    ColorWriteMask = ColorComponentFlags.R
-                                                        | ColorComponentFlags.G
-                                                        | ColorComponentFlags.B
-                                                        | ColorComponentFlags.A,
-                                    BlendEnable = false,
-                                    SourceColorBlendFactor = BlendFactor.One,
-                                    DestinationColorBlendFactor = BlendFactor.Zero,
-                                    ColorBlendOp = BlendOp.Add,
-                                    SourceAlphaBlendFactor = BlendFactor.One,
-                                    DestinationAlphaBlendFactor = BlendFactor.Zero,
-                                    AlphaBlendOp = BlendOp.Add
-                                }
-                            },
-                            LogicOpEnable = false,
-                            LogicOp = LogicOp.Copy,
-                            BlendConstants = new float[] {0,0,0,0}
-                        },
-                        Stages = new[]
-                        {
-                            new PipelineShaderStageCreateInfo
-                            {
-                                Stage = ShaderStageFlags.Vertex,
-                                Module = this.vertShader,
-                                Name = "main"
-                            },
-                            new PipelineShaderStageCreateInfo
-                            {
-                                Stage = ShaderStageFlags.Fragment,
-                                Module = this.fragShader,
-                                Name = "main"
+                                Offset = new Offset2D(),
+                                Extent= this.swapChainExtent
                             }
                         }
+                    },
+                    RasterizationState = new PipelineRasterizationStateCreateInfo
+                    {
+                        DepthClampEnable = false,
+                        RasterizerDiscardEnable = false,
+                        PolygonMode = PolygonMode.Fill,
+                        LineWidth = 1,
+                        CullMode = CullModeFlags.Back,
+                        FrontFace = FrontFace.Clockwise,
+                        DepthBiasEnable = false
+                    },
+                    MultisampleState = new PipelineMultisampleStateCreateInfo
+                    {
+                        SampleShadingEnable = false,
+                        RasterizationSamples = SampleCountFlags.SampleCount1,
+                        MinSampleShading = 1
+                    },
+                    ColorBlendState = new PipelineColorBlendStateCreateInfo
+                    {
+                        Attachments = new[]
+                        {
+                            new PipelineColorBlendAttachmentState
+                            {
+                                ColorWriteMask = ColorComponentFlags.R
+                                                    | ColorComponentFlags.G
+                                                    | ColorComponentFlags.B
+                                                    | ColorComponentFlags.A,
+                                BlendEnable = false,
+                                SourceColorBlendFactor = BlendFactor.One,
+                                DestinationColorBlendFactor = BlendFactor.Zero,
+                                ColorBlendOp = BlendOp.Add,
+                                SourceAlphaBlendFactor = BlendFactor.One,
+                                DestinationAlphaBlendFactor = BlendFactor.Zero,
+                                AlphaBlendOp = BlendOp.Add
+                            }
+                        },
+                        LogicOpEnable = false,
+                        LogicOp = LogicOp.Copy,
+                        BlendConstants = new float[] {0,0,0,0}
+                    },
+                    Stages = new[]
+                    {
+                        new PipelineShaderStageCreateInfo
+                        {
+                            Stage = ShaderStageFlags.Vertex,
+                            Module = vertShader,
+                            Name = "main"
+                        },
+                        new PipelineShaderStageCreateInfo
+                        {
+                            Stage = ShaderStageFlags.Fragment,
+                            Module = fragShader,
+                            Name = "main"
+                        }
                     }
-                }).Single();
+                }
+            }).Single();
+
+            fragShader.Dispose();
+            vertShader.Dispose();
         }
 
         private void CreateFrameBuffers()
