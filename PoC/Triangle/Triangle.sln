@@ -5,6 +5,7 @@ VisualStudioVersion = 15.0.26228.9
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriangleApp", "TriangleApp\TriangleApp.csproj", "{FA537CFE-E1C8-4199-B03D-23AAD5C45632}"
 	ProjectSection(ProjectDependencies) = postProject
+		{1168FF3F-8E53-4616-BCD6-C5CE687D5D4C} = {1168FF3F-8E53-4616-BCD6-C5CE687D5D4C}
 		{56D38F9F-AD58-4B22-A4DD-0FC6727BEE33} = {56D38F9F-AD58-4B22-A4DD-0FC6727BEE33}
 	EndProjectSection
 EndProject
